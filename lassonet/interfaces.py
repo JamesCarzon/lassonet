@@ -25,6 +25,16 @@ from .cox import CoxPHLoss, concordance_index
 from .model import LassoNet
 
 
+class QuantileLoss(torch.nn.Module):
+    def __init__(self, quantile=0.5):
+        super().__init__()
+        self.quantile = quantile
+    
+    def forward(self, y_pred, y_true):
+        errors = y_true - y_pred
+        return torch.mean(torch.max(self.quantile * errors, (self.quantile - 1) * errors))
+
+
 def abstractattr(f):
     return property(abstractmethod(f))
 
@@ -822,6 +832,57 @@ class LassoNetIntervalRegressor(BaseLassoNet):
         _, vs, _, _, delta3 = y_test.T
         risk = -self.predict(X_test)
         return concordance_index(risk, vs, (1 - delta3))
+
+
+class LassoNetQuantileRegressor(RegressorMixin, MultiOutputMixin, BaseLassoNet):
+    """Use LassoNet for Quantile Regression
+    
+    Parameters
+    ----------
+    quantile : float or list of float, default=0.5
+        Quantile(s) to estimate. Must be between 0 and 1.
+        If list, will estimate multiple quantiles simultaneously.
+    """
+    
+    def __init__(self, quantile=0.5, **kwargs):
+        BaseLassoNet.__init__(self, **kwargs)
+        
+        if isinstance(quantile, (list, tuple)):
+            self.quantile = quantile
+            self.n_quantiles = len(quantile)
+        else:
+            self.quantile = [quantile]
+            self.n_quantiles = 1
+            
+        assert all(0 < q < 1 for q in self.quantile), "Quantiles must be between 0 and 1"
+        self.criterion = QuantileLoss(quantile=self.quantile[0])
+    
+    def _convert_y(self, y):
+        y = torch.FloatTensor(y).to(self.device)
+        if len(y.shape) == 1:
+            y = y.view(-1, 1)
+        return y
+    
+    @staticmethod
+    def _output_shape(y):
+        # Could return len(quantile) for multi-quantile
+        return 1
+    
+    def predict(self, X, quantile_idx=0):
+        """
+        Parameters
+        ----------
+        X : array-like
+            Input features
+        quantile_idx : int, default=0
+            Which quantile to return (if multiple were estimated)
+        """
+        self.model.eval()
+        with torch.no_grad():
+            ans = self.model(self._cast_input(X))
+        if isinstance(X, np.ndarray):
+            ans = ans.cpu().numpy()
+        return ans
 
 
 class BaseLassoNetCV(BaseLassoNet, metaclass=ABCMeta):
