@@ -3,6 +3,7 @@ from .interfaces import (
     LassoNetClassifier,
     LassoNetClassifierCV,
     LassoNetCoxRegressor,
+    LassoNetQuantileRegressor,
     LassoNetCoxRegressorCV,
     LassoNetRegressor,
     LassoNetRegressorCV,

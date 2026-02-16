@@ -855,7 +855,12 @@ class LassoNetQuantileRegressor(RegressorMixin, MultiOutputMixin, BaseLassoNet):
             self.n_quantiles = 1
             
         assert all(0 < q < 1 for q in self.quantile), "Quantiles must be between 0 and 1"
-        self.criterion = QuantileLoss(quantile=self.quantile[0])
+        self._criterion = QuantileLoss(quantile=self.quantile[0])
+    
+    @property
+    def criterion(self):
+        """Return the quantile loss criterion"""
+        return self._criterion
     
     def _convert_y(self, y):
         y = torch.FloatTensor(y).to(self.device)
@@ -883,8 +888,6 @@ class LassoNetQuantileRegressor(RegressorMixin, MultiOutputMixin, BaseLassoNet):
         if isinstance(X, np.ndarray):
             ans = ans.cpu().numpy()
         return ans
-
-
 class BaseLassoNetCV(BaseLassoNet, metaclass=ABCMeta):
     def __init__(self, cv=None, **kwargs):
         """
